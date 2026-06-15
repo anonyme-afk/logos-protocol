@@ -1,0 +1,5 @@
+input_text,logos_output,input_words,logos_tokens_approx,CR_approx,model,contributor,notes
+"Yesterday I spent all night trying to fix the authentication bug","[t:-1d,dur:~8h][try→fix:auth]",13,21,0.6,claude-3-sonnet,@anonyme-afk,"single sentence - overhead hurts"
+"I am frustrated because the database is broken","[state:frustrated][db:!broken]",9,11,0.8,claude-3-sonnet,@anonyme-afk,"single sentence - marginal"
+"The application deployment failed because of a dependency issue. The error message said the configuration was invalid. I need to fix this urgently.","[app.deploy:∅←dep.issue][err_msg:cfg_invalid][!urgent:fix_cfg]",34,30,1.1,claude-3-sonnet,@anonyme-afk,"paragraph - slight win"
+"Full 5-turn debugging session (see examples/v2-full-session.md)","[SESSION:v3][PACK...see file]",240,38,6.3,claude-3-sonnet,@anonyme-afk,"session pack - real use case"
