@@ -414,6 +414,80 @@ CHEATSHEET = """
 ╚════════════════════════════════════════════════════════════╝
 """
 
+
+# ─── COMPAT CHECK ─────────────────────────────────────────────────────────────
+# Documented in README.md and spec/LOGOS_LITE.md but never implemented.
+# Added during audit — June 2026.
+
+COMPAT_TEST = "y:8h fix:auth x | check:db x | find:localStorage=ROOT | fix:add_setItem ok"
+
+COMPAT_ELEMENTS = [
+    ("yesterday / hier",                  ["yesterday", "hier", "last night"]),
+    ("about 8 hours duration",            ["8h", "8 hour", "eight hour", "toute la nuit", "all night"]),
+    ("tried to fix authentication",       ["auth", "authentication", "fix"]),
+    ("failed (first attempt)",            ["fail", "failed", "didn't work", "not work"]),
+    ("checked the database",              ["database", "db", "check"]),
+    ("found issue in localStorage",       ["localstorage", "local storage", "storage"]),
+    ("identified as root cause",          ["root", "cause", "root cause"]),
+    ("fix involves setItem / save call",  ["setitem", "save", "fix"]),
+    ("fix succeeded",                     ["success", "ok", "work", "fixed", "solved"]),
+]
+
+def run_compat_check():
+    """Interactive compatibility check. Zero deps — user pastes model response."""
+    print("=" * 64)
+    print("LOGOS v4 — MODEL COMPATIBILITY CHECK")
+    print("=" * 64)
+    print()
+    print("Step 1 — Paste this EXACT line into the model you want to test:")
+    print()
+    print(f'  Decompress and explain in plain language: "{COMPAT_TEST}"')
+    print()
+    print("Step 2 — Paste the model's full response below, then press Enter twice.")
+    print("-" * 64)
+
+    lines = []
+    try:
+        while True:
+            line = input()
+            if line == "" and lines and lines[-1] == "":
+                break
+            lines.append(line)
+    except (EOFError, KeyboardInterrupt):
+        pass
+
+    response = "\n".join(lines).lower()
+    if not response.strip():
+        print("\nNo response entered. Run again and paste the model's answer.")
+        return
+
+    found, missing = [], []
+    for desc, keywords in COMPAT_ELEMENTS:
+        hit = any(k in response for k in keywords)
+        (found if hit else missing).append(desc)
+
+    score = len(found)
+    total = len(COMPAT_ELEMENTS)
+    pct = round(100 * score / total)
+
+    print(f"\nSCORE: {score}/{total} ({pct}%)")
+    if found:
+        print("\n  Recovered:")
+        for f in found: print(f"    ✅ {f}")
+    if missing:
+        print("\n  Missed:")
+        for m in missing: print(f"    ❌ {m}")
+
+    print()
+    print("-" * 64)
+    if pct >= 85:
+        print("VERDICT: Excellent — use full Logos v4, PRC, @alias freely.")
+    elif pct >= 60:
+        print("VERDICT: Partial — use Logos-Lite (spec/LOGOS_LITE.md), avoid dense aliases.")
+    else:
+        print("VERDICT: Poor fit — stick to natural language or try Logos-Lite.")
+    print("=" * 64)
+
 # ─── CLI ──────────────────────────────────────────────────────────────────────
 
 def main():
@@ -434,6 +508,7 @@ def main():
     sub.add_parser("bench", help="Run benchmark suite")
     sub.add_parser("session", help="Interactive session with /pack")
     sub.add_parser("cheatsheet", help="Print quick reference")
+    sub.add_parser("compat-check", help="Test if your model understands Logos v4/Lite")
 
     args = parser.parse_args()
 
@@ -449,10 +524,22 @@ def main():
             print(f"SKIP: {reason}")
             print(f"Use natural: {args.text}")
         else:
+            # BUGFIX: should_compress() only checks heuristic patterns,
+            # never verifies the actual CR. This caused "auto" to print
+            # "COMPRESS" even when real CR < 1.0 (text gets LARGER).
+            # Fix: compute real CR and re-validate against 1.2x threshold.
             c, i, o = compress_v4(args.text)
             cr = round(i / max(o, 1), 2)
-            print(f"COMPRESS ({reason})")
-            print(f"  {i}t → {o}t [CR: {cr}×]: {c}")
+            if cr < 1.2:
+                print(f"SKIP: heuristic suggested compression ({reason}), "
+                      f"but real CR is only {cr}× (< 1.2× threshold)")
+                print(f"Use natural: {args.text}")
+            else:
+                print(f"COMPRESS ({reason})")
+                print(f"  {i}t → {o}t [CR: {cr}×]: {c}")
+
+    elif args.cmd == "compat-check":
+        run_compat_check()
 
     elif args.cmd == "discover":
         print(discover(args.text))
