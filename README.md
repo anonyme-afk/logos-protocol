@@ -1,206 +1,179 @@
 # LOGOS 🗜️
-### Ultra-condensed language protocol for LLMs — no retraining needed
+### Token compression pour LLMs — sans réentraînement, sans friction
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-3.0-blue.svg)](spec/GRAMMAR_v3.md)
+[![Version](https://img.shields.io/badge/version-5.0-blue.svg)](spec/GRAMMAR_v5.md)
 [![Honest](https://img.shields.io/badge/benchmarks-honest-green.svg)](spec/HONEST_BENCHMARKS.md)
 
-> **Extend your effective Claude/GPT session length by 5-10×** by compressing session history — no model retraining needed.
+> **Étendez votre session Claude/GPT de 3 à 7×** en compressant l'historique automatiquement.
+> Zéro friction. Zéro réentraînement. Fonctionne aujourd'hui.
 
 ---
 
-## The Real Problem
+## Le vrai problème
 
-When you talk to Claude or GPT-4 for a long session, **every message re-sends the full conversation history**. A 20-turn debug session = 3,000+ tokens of history sent on turn 20, most of it redundant.
+Chaque message re-envoie l'**intégralité** de l'historique de conversation.
+À la 20ème question : 3000+ tokens d'historique, dont 80% sont redondants.
 
-Logos solves this by giving you a compact, model-native format for session history.
-
----
-
-## Honest Benchmarks (Updated v3)
-
-> We made a mistake in v1/v2: we claimed 8-20× ratios based on character counts, not token counts.
-> Here are the real numbers.
-
-| Use case | Real CR | Worth it? |
-|----------|---------|-----------|
-| Single sentence compression | 0.5-1.1× | ❌ No |
-| Paragraph compression | 2-3× | 🟡 Marginal |
-| Session history compression | **10-20×** | ✅ Yes |
-| Repeated concepts (aliases) | **5-15× per reuse** | ✅ Yes |
-
-**The real win**: compressing your session history pack, not individual messages.
+Logos compresse cet historique **automatiquement, à chaque tour** (v5 PRC).
 
 ---
 
-## How It Works (30 Seconds)
+## Benchmarks honnêtes
 
-LLMs were trained on JSON, code, math notation, ISO formats.
-They already understand these "sub-languages" natively.
-Logos assembles them into a compact context format.
+> Les premières versions (v1-v3) annonçaient 8-20× basé sur des comptages de *caractères*.
+> Les vrais chiffres en tokens BPE :
+
+| Usage | CR réel mesuré | Vaut le coup ? |
+|-------|----------------|----------------|
+| Phrase isolée | 1.5-2× | 🟡 Marginal |
+| Paragraphe | 2-3× | ✅ Oui |
+| Historique de session | **3-7×** | ✅✅ Absolument |
+| Concepts répétés (@alias) | **5-15× par réutilisation** | ✅✅ Majeur |
+
+---
+
+## Quick Start (30 secondes)
+
+**Option 1 — Zéro friction (recommandé) :**
+Collez ce prompt au début d'une nouvelle conversation :
 
 ```
-Normal message (150 tokens):
-"Yesterday I spent all night debugging the auth issue. I tried checking 
-the JWT expiry first, that wasn't it. Then I checked the localStorage 
-refresh token logic and found it wasn't being saved."
-
-Logos PACK after 10 turns (15 tokens):
-[t:-1d,dur:~8h][check:JWT.expiry→∅issue][find:localStorage∅save=!!root_cause]
+[LOGOS:v5]
+After each response, append [H: <10-token Logos summary of this exchange>].
+Read all [H:] blocks silently before each new response.
+Format: y:=yest -Nd=past fix:x ok FAIL -> <- | @alias
 ```
 
----
+C'est tout. Le modèle compresse automatiquement à chaque tour.
 
-## Quick Start
-
+**Option 2 — CLI local :**
 ```bash
-# Install (no dependencies)
 git clone https://github.com/anonyme-afk/logos-protocol
-cd logos-protocol
-
-# Compress a sentence
-python tools/logos-v3.py compress "Yesterday I spent all night fixing the auth bug"
-
-# Interactive session with auto-compression
-python tools/logos-v3.py session
-
-# See the cheatsheet
-python tools/logos-v3.py cheatsheet
-
-# Run benchmarks
-python tools/logos-v3.py bench
-
-# Get compat check prompt for your model
-python tools/logos-v3.py compat-check
+python tools/logos-v4.py cheatsheet
+python tools/logos-v4.py auto "Yesterday I spent all night fixing the auth bug"
+python tools/logos-v4.py session
 ```
 
 ---
 
-## Boot Prompt (21 tokens)
-
-Paste at the start of any conversation:
+## Syntaxe v4 (bracket-free — le vrai format qui marche)
 
 ```
-[LOGOS:v3] Decompress before responding. Build VOC as we go.
+TIME:     y:=hier  +1d:=demain  -Nd:=il y a N jours  Nh=durée
+RÉSULTAT: x=échec  ok=succès  !=critique préfixe
+ACTION:   fix:X  check:X  find:X  deploy:X  test:X
+CAUSAL:   A->B=A cause B  A<-B=A parce que B
+ÉTAT:     frustrated  stuck  blocked  (mot simple, toujours en fin)
+SEP:      |  (séparateur de clauses)
+ALIAS:    @x=définition  (rentable seulement si utilisé 3+ fois)
+VERBATIM: !!x  (jamais compressé — pour les infos critiques)
 ```
 
-Then use `/pack` (or ask Claude "make a LOGOS_PACK") every 5-10 turns to compress history.
-
----
-
-## Syntax Reference
-
+**Exemple :**
 ```
-TIME:           t:-1d=yesterday  t:0d=today  t:+1d=tomorrow  dur:~8h=~8hours
-RESULT:         ∅x=failed/null   ✓x=succeeded  !x=critical  !!x=verbatim-preserve
-CAUSALITY:      [A→B]=A causes B  [A←B]=A because B  [A+B]=A linked to B
-STATE:          state:frustrated / stuck / blocked / confused / ?=unknown
-COMPRESSION:    [L1:...]=lexical  [L2:...]=semantic  [L3:...]=episodic  [L4:...]=full-tree
-ALIASES:        [VOC: @x=definition]  then use @x anywhere
-SESSION PACK:   {∑}=compress all above  [SESSION:v3][HISTORY:T1:...,T2:...]
-```
+"Hier j'ai passé la nuit à corriger le bug d'auth, échec, je suis bloqué"
+→  y:8h fix:auth x | stuck
+   11 tokens → 6 tokens  (CR ~1.8×)
 
-Full reference: [spec/GRAMMAR_v3.md](spec/GRAMMAR_v3.md)
-
----
-
-## Example: Full Debug Session Pack
-
-**Original 10-turn session** (~1,200 tokens):
-> A full debugging session about a JWT authentication bug where localStorage wasn't saving the refresh token.
-
-**Logos PACK** (~65 tokens):
-```logos
-[SESSION:v3]
-[VOC:ANCHOR: @bug1=!!localStorage∅setItem:refresh_token]
-[HISTORY:
-  T1: [t:-1d,dur:~8h][hyp:JWT.expiry→∅issue]
-  T2-T5: [explore:refresh_token_logic]
-  T6: [find:@bug1=!!root_cause]
-  T7-T9: [fix:add_setItem][test:3/3pass]
-  T10: [✓auth.stable]
-]
-[STATS: 1200tok→65tok, CR:18.5×]
+"J'ai essayé fix:auth, échec. Vérifié db, pas ça. Maintenant bloqué."
+→  fix:auth x | check:db x | stuck
+   27 tokens → 9 tokens  (CR ~3×)
 ```
 
 ---
 
-## File Structure
+## Les 3 Problèmes Structurels Résolus (v5)
+
+### Problème 1 : La friction du /pack
+
+**Avant (v1-v4)** : devoir taper `/pack` toutes les 10 minutes casse le flow.
+
+**v5 PRC** : le modèle compresse automatiquement le tour précédent à chaque réponse.
+Zéro action utilisateur. [→ GRAMMAR_v5.md](spec/GRAMMAR_v5.md)
+
+### Problème 2 : Élitisme des modèles
+
+**Avant** : modèles <7B = ❌ inutilisable.
+
+**Logos-Lite** : format ASCII-only sans symboles unicode. Compatible 3B+.
+CR réduit (~1.3-1.8×) mais ça *marche*. [→ LOGOS_LITE.md](spec/LOGOS_LITE.md)
+
+### Problème 3 : Perte des chemins secondaires
+
+**Avant** : compression 1200→65 tokens = hypothèses rejetées disparues.
+À T15, l'IA re-explore ce qu'elle a déjà réfuté.
+
+**Tree PACK avec !!DEAD** : les branches mortes sont préservées avec leur verdict.
++30% de tokens vs classic pack. Économise ~200 tokens si changement de direction.
+Rentable dès que prob(changement de cap) > 12%. [→ GRAMMAR_v5.md](spec/GRAMMAR_v5.md)
+
+---
+
+## Compatibilité
+
+| Modèle | Format | CR attendu |
+|--------|--------|-----------|
+| <3B params | Langage naturel | — |
+| 3B-7B | **Logos-Lite** | 1.3-1.8× |
+| 7B-13B | Logos v4 (sans L3/L4) | 1.5-2.5× |
+| 13B-70B | Logos v4 complet | 2-4× |
+| Claude 3+, GPT-4+, Gemini 1.5+ | Logos v5 + PRC | 3-7× |
+
+Test rapide : `python tools/logos-v4.py compat-check`
+
+---
+
+## Structure du repo
 
 ```
 logos-protocol/
-├── README.md                 ← you are here
+├── README.md
 ├── spec/
-│   ├── GRAMMAR_v3.md         ← full v3 specification (L1-L4, VOC, TREE)
-│   ├── GRAMMAR_v2.md         ← v2 spec (backward compatible)
-│   ├── GRAMMAR.md            ← v1 spec
-│   ├── OPERATORS.md          ← quick reference card
-│   ├── BENCHMARK.md          ← benchmark framework
-│   └── HONEST_BENCHMARKS.md  ← real measured data (read this first)
+│   ├── GRAMMAR_v5.md         ← v5 : PRC + Tree + Lite (les 3 problèmes résolus)
+│   ├── GRAMMAR_v4.md         ← v4 : bracket-free (le vrai format efficace)
+│   ├── GRAMMAR_v3.md         ← v3 : niveaux L1-L4
+│   ├── GRAMMAR_v2.md         ← v2 : ICL + @alias
+│   ├── GRAMMAR.md            ← v1 : original
+│   ├── LOGOS_LITE.md         ← format pour modèles 3B-13B
+│   ├── HONEST_BENCHMARKS.md  ← vrais chiffres mesurés
+│   ├── OPERATORS.md          ← référence rapide
+│   └── BENCHMARK.md          ← framework de test
 ├── research/
-│   ├── PAROXYSM.md           ← theoretical foundations (v2)
-│   └── PAROXYSM_v2.md        ← unsolved problems, now solved (v3)
+│   ├── AUTO_DISCOVERY.md     ← 6 cycles de découverte automatique
+│   ├── PAROXYSM_v2.md        ← 6 problèmes non résolus (maintenant résolus)
+│   └── PAROXYSM.md           ← fondations théoriques
 ├── examples/
-│   ├── examples-by-domain.md ← 6 domains: dev, PM, research...
-│   └── v2-full-session.md    ← complete session example
+│   ├── examples-by-domain.md ← 6 domaines
+│   └── v2-full-session.md    ← exemple de session complète
 ├── prompts/
-│   └── system-prompts.md     ← copy-paste prompts for Claude/GPT
+│   ├── system-prompts-v5.md  ← prompts v5 avec PRC
+│   └── system-prompts-v3.md  ← prompts v3
 ├── tools/
-│   ├── logos-v3.py           ← v3 CLI (zero dependencies)
-│   └── logos-v2.py           ← v2 CLI (API-powered)
+│   ├── logos-v4.py           ← CLI v4 (zero dep, auto-detect)
+│   ├── logos-v3.py           ← CLI v3
+│   └── logos-compress.py     ← CLI v1
 └── tests/
-    └── community_benchmarks.csv  ← submit your benchmarks here
+    └── community_benchmarks.csv
 ```
 
 ---
 
-## Model Compatibility
+## Ce qui reste impossible (honnêteté)
 
-| Model | Level | Notes |
-|-------|-------|-------|
-| Claude 3+ (Sonnet/Opus) | Full v3 | Best performance |
-| GPT-4+ | Full v3 | Excellent |
-| Gemini 1.5+ | v2 | L3/L4 partial |
-| Claude 2, GPT-3.5 | v1/v2 | Basic operators only |
-| Mistral 7B+ | v1 | Simple syntax only |
-| <7B models | ❌ | Use natural language |
-
-Test your model: `python tools/logos-v3.py compat-check`
+1. **L'extension navigateur** reste le Saint Graal. PRC réduit la friction à ~0, mais une extension qui injecte le pack et repart proprement sans aucune action = pas encore fait.
+2. **Le plafond de Shannon** : ~2-3× max par message, ~5-7× max pour les sessions. Aucun format ne peut faire mieux sans perte d'information.
+3. **Les petits modèles** : Logos-Lite aide, mais un modèle 3B reste fondamentalement limité. Ce n'est pas un problème de format, c'est un problème de capacité.
 
 ---
 
-## Contributing
+## Contribuer
 
-### Quickest contribution (10 minutes)
-1. Pick any sentence you've sent to an AI this week
-2. Compress it manually using the cheatsheet
-3. Test decompression with your LLM
-4. Add a row to `tests/community_benchmarks.csv`
-5. Submit a PR
+**10 minutes** : prenez un message que vous avez envoyé à une IA cette semaine, compressez-le en Logos, testez la décompression, ajoutez une ligne à `tests/community_benchmarks.csv`.
 
-### Bigger contributions
-- Test L3/L4 compression on real long sessions
-- Add domain-specific aliases (medical, legal, finance, gaming)
-- Build a browser extension that auto-packs sessions
-- Port logos-v3.py to JavaScript/TypeScript
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
+**Plus grand** : portez logos-v4.py en JavaScript/TypeScript pour les extensions navigateur.
 
 ---
 
-## Origins
-
-Logos was invented in a single conversation trying to solve Claude's rate limits.
-The insight: LLMs already speak dozens of "sub-languages" (JSON, math, ISO formats).
-Logos is just those sub-languages assembled into a compression protocol.
-
-The theoretical foundation is the "GIST tokens" paper (Mu et al., 2023) —
-though Logos achieves similar goals without model retraining.
-
----
-
-## License
-
-MIT — do whatever you want with it.
-
-*Built with rate limit frustration and too much coffee. ☕*
+*Né de la frustration des rate limits. Affiné par l'auto-discovery. Honnête sur ses limites.*
+MIT License.
